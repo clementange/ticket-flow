@@ -1,122 +1,86 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useEffect, useCallback } from "react";
+import TicketListe from "./components/TicketListe";
+import CreationFormulaire from "./components/CreationFormulaire";
+import { listerTickets, fermerTicket, type StatutFilter } from "./api/ticketApi";
 
-function App() {
-  const [count, setCount] = useState(0)
+type Etat = "chargement" | "donnees" | "vide" | "erreur";
+
+export default function App() {
+  const [statutFilter, setStatutFilter] = useState<StatutFilter>("TOUT");
+  const [tickets, setTickets] = useState<Array<{ id: number; titre: string; description: string | null; statut: string; dateCreation: string }>>([]);
+  const [etat, setEtat] = useState<Etat>("chargement");
+  const [erreurServeur, setErreurServeur] = useState<string | null>(null);
+
+  const charger = useCallback(async () => {
+    setEtat("chargement");
+    setErreurServeur(null);
+    try {
+      const resultat = await listerTickets(statutFilter);
+      setTickets(resultat);
+      setEtat(resultat.length === 0 ? "vide" : "donnees");
+    } catch (err: any) {
+      if (err && typeof err === "object" && "status" in err) {
+        setErreurServeur((err as { message: string }).message);
+      } else {
+        setErreurServeur(String(err ?? "Impossible de joindre le serveur"));
+      }
+      setEtat("erreur");
+    }
+  }, [statutFilter]);
+
+  useEffect(() => { charger(); }, [charger]);
+
+  function handleFermer(id: number) {
+    if (!confirm("Voulez-vous vraiment fermer ce ticket ?")) return;
+    fermerTicket(id)
+      .then(() => charger())
+      .catch((err: any) => {
+        const msg = err && typeof err === "object" && "message" in err ? (err as { message: string }).message : String(err ?? "Erreur");
+        alert(msg);
+      });
+  }
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <header className="app-header">
+        <h1>Tickets</h1>
+      </header>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+      <section className="app-section">
+        <div className="filtre-statut">
+          <span>Filtre :</span>
+          <button className={`btn-filtr ${statutFilter === "TOUT" ? "actif" : ""}`} onClick={() => { setStatutFilter("TOUT"); charger(); }}>
+            Tous
+          </button>
+          <button className={`btn-filtr ${statutFilter === "OUVERT" ? "actif" : ""}`} onClick={() => { setStatutFilter("OUVERT"); charger(); }}>
+            OUVERT
+          </button>
+          <button className={`btn-filtr ${statutFilter === "EN_COURS" ? "actif" : ""}`} onClick={() => { setStatutFilter("EN_COURS"); charger(); }}>
+            EN_COURS
+          </button>
+          <button className={`btn-filtr ${statutFilter === "FERME" ? "actif" : ""}`} onClick={() => { setStatutFilter("FERME"); charger(); }}>
+            FERME
+          </button>
         </div>
       </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <section className="app-section">
+        <CreationFormulaire onCreate={charger} />
+      </section>
+
+      <section className="app-section">
+        {etat === "chargement" && <p className="state-chargement">Chargement des tickets…</p>}
+        {etat === "donnees" && <TicketListe tickets={tickets} aufFermer={handleFermer} />}
+        {etat === "vide" && <p className="state-vide">Aucun ticket</p>}
+        {etat === "erreur" && (
+          <div className="state-erreur">
+            <p>Le serveur est injoignable : {erreurServeur}</p>
+            <button className="lien btn-reessayer" onClick={charger}>
+              Réessayer
+            </button>
+          </div>
+        )}
+      </section>
     </>
-  )
+  );
 }
-
-export default App
